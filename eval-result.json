@@ -1,0 +1,113 @@
+{
+  "seed": 20261009,
+  "total": 740,
+  "confusion": {
+    "legitimate": {
+      "legitimate": 498,
+      "suspicious": 2,
+      "inconclusive": 0
+    },
+    "suspicious": {
+      "legitimate": 7,
+      "suspicious": 220,
+      "inconclusive": 13
+    }
+  },
+  "falsePositiveRate": 0.004,
+  "detectionRate": 0.9166666666666666,
+  "inconclusiveRate": {
+    "legitimate": 0,
+    "suspicious": 0.05416666666666667
+  },
+  "byScenario": {
+    "baseline": {
+      "label": "legitimate",
+      "legitimate": 100,
+      "suspicious": 0,
+      "inconclusive": 0
+    },
+    "organic_viral": {
+      "label": "legitimate",
+      "legitimate": 100,
+      "suspicious": 0,
+      "inconclusive": 0
+    },
+    "slow_growth": {
+      "label": "legitimate",
+      "legitimate": 100,
+      "suspicious": 0,
+      "inconclusive": 0
+    },
+    "niche_noisy": {
+      "label": "legitimate",
+      "legitimate": 98,
+      "suspicious": 2,
+      "inconclusive": 0
+    },
+    "live_event": {
+      "label": "legitimate",
+      "legitimate": 100,
+      "suspicious": 0,
+      "inconclusive": 0
+    },
+    "bought_plateau": {
+      "label": "suspicious",
+      "legitimate": 0,
+      "suspicious": 60,
+      "inconclusive": 0
+    },
+    "step_cliff": {
+      "label": "suspicious",
+      "legitimate": 2,
+      "suspicious": 56,
+      "inconclusive": 2
+    },
+    "mechanical_drip": {
+      "label": "suspicious",
+      "legitimate": 4,
+      "suspicious": 45,
+      "inconclusive": 11
+    },
+    "night_injection": {
+      "label": "suspicious",
+      "legitimate": 1,
+      "suspicious": 59,
+      "inconclusive": 0
+    }
+  },
+  "falsePositives": [
+    "niche_noisy-010",
+    "niche_noisy-068"
+  ],
+  "missedAsLegitimate": [
+    "step_cliff-026",
+    "step_cliff-042",
+    "mechanical_drip-007",
+    "mechanical_drip-010",
+    "mechanical_drip-021",
+    "mechanical_drip-054",
+    "night_injection-025"
+  ],
+  "seedSensitivity": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ],
+    "falsePositiveRate": {
+      "min": 0.004,
+      "max": 0.014
+    },
+    "detectionRate": {
+      "min": 0.9125,
+      "max": 0.9541666666666667
+    }
+  }
+}
