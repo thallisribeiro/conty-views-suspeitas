@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classify, RULES, type ClassificationResult, type SignalName } from '../src/classifier';
+import { generateDataset } from '../src/dataset';
 import {
   boughtPlateau,
   flatNormal,
@@ -75,6 +76,14 @@ describe('casos óbvios', () => {
     expect(r.classification).toBe('suspicious');
   });
 
+  it('série sem nenhuma view é inconclusiva, sem motivo absurdo', () => {
+    const zeros = flatNormal().map((p) => ({ ...p, views: 0 }));
+    const r = classify(zeros, SP);
+    expect(r.classification).toBe('inconclusive');
+    expect(r.signals.some((s) => s.fired)).toBe(false);
+    expect(r.reason).toContain('não tem nenhuma view');
+  });
+
   it('pico grande logo no começo da série, sem histórico antes, é inconclusivo', () => {
     const r = classify(boughtPlateau().slice(48), SP);
     expect(r.classification).toBe('inconclusive');
@@ -92,15 +101,22 @@ describe('explicação', () => {
     expect(r.reason).not.toMatch(/[a-z]_[a-z]|null|undefined|NaN/);
   });
 
-  it('cada sinal traz nome, valor medido, limiar, sentido do limiar e se disparou', () => {
-    for (const s of classify(boughtPlateau(), SP).signals) {
-      expect(typeof s.name).toBe('string');
-      expect(typeof s.threshold).toBe('number');
-      expect(['<=', '>=']).toContain(s.firesWhen);
-      expect(s.value === null || typeof s.value === 'number').toBe(true);
-      if (s.value !== null) expect(s.fired).toBe(s.firesWhen === '<=' ? s.value <= s.threshold : s.value >= s.threshold);
-      expect(s.description.length).toBeGreaterThan(20);
+  it('cada sinal traz nome, valor medido, limiar, sentido do limiar e se disparou, sem se contradizer em nenhuma série do dataset', () => {
+    for (const item of generateDataset()) {
+      for (const s of classify(item.series, item.timezone).signals) {
+        expect(['<=', '>=']).toContain(s.firesWhen);
+        expect(typeof s.threshold).toBe('number');
+        if (s.value === null) expect(s.fired).toBe(false);
+        else expect(s.fired).toBe(s.firesWhen === '<=' ? s.value <= s.threshold : s.value >= s.threshold);
+        expect(s.description).toMatch(/^[A-ZÁÉÍÓÚÂÊÔÃÕÇ].{20,}\.$/);
+      }
     }
+  });
+
+  it('os textos concordam em gênero com "o pico" e "a série"', () => {
+    const texts = classify(flatNormal(), SP).signals.map((s) => s.description).join(' ');
+    expect(texts).toContain('topo da série');
+    expect(texts).not.toMatch(/\bo série|do série/);
   });
 
   it('madrugada é contada no fuso informado: o mesmo robô das 03h em São Paulo é 15h em Tóquio', () => {

@@ -22,17 +22,17 @@ Saída de `npm run eval` (seed fixa `20261009`, 740 séries: 500 legítimas e 24
 ```
 rótulo \ classificado     legitimate    suspicious  inconclusive
 legitimate                       498             2             0
-suspicious                         7           220            13
+suspicious                         6           220            14
 ```
 
-- **Taxa de falso positivo** (legítimos acusados de suspeitos ÷ legítimos): <!-- fp-rate -->0,4%<!-- /fp-rate --> (2 de 500).
+- **Taxa de falso positivo** (legítimos acusados de suspeitos ÷ legítimos): <!-- fp-rate -->0,4%<!-- /fp-rate --> (<!-- fp-count -->2 de 500<!-- /fp-count -->).
 - **Taxa de detecção** (suspeitos acusados ÷ suspeitos): <!-- detection-rate -->91,7%<!-- /detection-rate -->.
-- **Onde o classificador preferiu não acusar:** 13 suspeitos (5,4%) saíram `inconclusive`, e nenhum legítimo.
+- **Onde o classificador preferiu não acusar:** <!-- inconclusive-suspicious -->14 suspeitos (5,8%)<!-- /inconclusive-suspicious --> saíram `inconclusive`, e nenhum legítimo.
 - **Quanto o número oscila só pelo sorteio:** com as seeds 1 a 10, o falso positivo ficou entre <!-- fp-range -->0,4% a 1,4%<!-- /fp-range --> e a detecção entre <!-- detection-range -->91,3% a 95,4%<!-- /detection-range -->. A seed padrão (escolhida antes de rodar) caiu na ponta boa da faixa de falso positivo.
 
-Esses números não foram escritos à mão. `test/evaluation.test.ts` roda a avaliação, lê os marcadores `<!-- fp-rate -->`, `<!-- detection-rate -->`, `<!-- fp-range -->` e `<!-- detection-range -->` deste README e falha se o texto for diferente do medido. O mesmo arquivo de teste falha se o `eval-result.json` do repositório estiver desatualizado.
+Esses números não foram escritos à mão. `test/evaluation.test.ts` roda a avaliação e falha se a matriz acima, os números entre marcadores `<!-- ... -->` deste README ou os casos citados por nome forem diferentes do medido. O mesmo arquivo de teste falha se o `eval-result.json` do repositório estiver desatualizado.
 
-**Leia com desconto.** O dataset é sintético e foi gerado pelas mesmas hipóteses em que o classificador se apoia: gente dorme, audiência real oscila por acaso, viral decai aos poucos, robô entrega taxa constante. Além disso, ajustei os limiares olhando para este mesmo dataset (detalhes em "Por que esses limiares"). Então 0,4% é o que acontece quando o mundo se comporta como eu imaginei. Em dados reais a taxa vai ser pior, e não sei quanto. Para ter um número em que dê para confiar, é preciso rotular uma amostra real (casos confirmados de compra e criadores verificados) e rodar a mesma conta.
+**Leia com desconto.** O dataset é sintético e foi gerado pelas mesmas hipóteses em que o classificador se apoia: gente dorme, audiência real oscila por acaso, viral decai aos poucos, robô entrega taxa constante. Além disso, ajustei os limiares olhando para este mesmo dataset (detalhes em "Por que esses limiares"), e todo robô do dataset roda 4 horas ou mais: compra curta, de 1 a 2 horas, não está medida e passa (ver "O que o classificador NÃO detecta"). Então 0,4% é o que acontece quando o mundo se comporta como eu imaginei. Em dados reais a taxa vai ser pior, e não sei quanto. Para ter um número em que dê para confiar, é preciso rotular uma amostra real (casos confirmados de compra e criadores verificados) e rodar a mesma conta.
 
 ## API
 
@@ -48,7 +48,7 @@ Esses números não foram escritos à mão. `test/evaluation.test.ts` roda a ava
 }
 ```
 
-- `series[].hour`: início da hora, ISO 8601 **com fuso** (`Z` ou `-03:00`). Sem fuso, "03h" seria ambíguo.
+- `series[].hour`: início da hora (minutos zerados), ISO 8601 **com fuso** (`Z` ou `-03:00`). Sem fuso, "03h" seria ambíguo.
 - `series[].views`: views ganhas **naquela hora** (inteiro, zero ou mais). Se você tem o contador acumulado, mande a diferença entre leituras seguidas.
 - As horas têm que ser consecutivas, em ordem, sem buracos nem repetições; até 2.160 horas (90 dias). Hora sem dado não deve virar zero, porque zero parece uma queda: mande só o trecho contínuo.
 - `timezone` (opcional, padrão `America/Sao_Paulo`): fuso IANA de quem assiste. Define o que é madrugada e os horários escritos no motivo.
@@ -57,7 +57,7 @@ Resposta: `classification`, `reason`, `signals[]` (cada um com `name`, `strength
 
 ### Exemplos (executados contra a API)
 
-Os três arquivos em `examples/` são o mesmo canal (~120 views/h, 5 dias). No primeiro, um vídeo estoura de verdade. No segundo, alguém compra um pico **da mesma altura** (~11 mil/h). No terceiro, um caso ambíguo.
+Os três arquivos em `examples/` são o mesmo canal (~120 views/h, 4 a 5 dias). No primeiro, um vídeo estoura de verdade. No segundo, alguém compra um pico **da mesma altura** (~11 mil/h). No terceiro, um caso ambíguo.
 
 ```bash
 curl -s -X POST http://127.0.0.1:3000/classify -H 'content-type: application/json' --data @examples/pico-comprado.json
@@ -74,8 +74,8 @@ curl -s -X POST http://127.0.0.1:3000/classify -H 'content-type: application/jso
       "description": "Platô mecânico: de 13/09 às 04h a 13/09 às 07h (4 horas) as views ficaram quase constantes em ~10.937/h, variação de 0,6%. Audiência real oscila e vai perdendo força depois do pico." },
     { "name": "cliff_drop", "strength": "strong", "threshold": 2, "firesWhen": "<=", "value": 1, "fired": true,
       "description": "Queda abrupta: depois de 6 horas no alto, as views caíram de 10.922/h para 97/h em uma hora (13/09 às 09h), de volta ao normal do canal nesse horário (~99/h nos dias antes do pico)." },
-    { "name": "mechanical_repetition", "strength": "strong", "threshold": 0.15, "firesWhen": "<=", "value": 0.78, "fired": false,
-      "description": "As oscilações de hora em hora parecem acaso de audiência real: mesmo no trecho mais regular, ficaram em 0,78× o que o acaso de pessoas reais produz (repetição mecânica seria até 0,15×)." },
+    { "name": "mechanical_repetition", "strength": "strong", "threshold": 0.15, "firesWhen": "<=", "value": null, "fired": false,
+      "description": "Não se aplica: o pico ficou menos de 8 horas acima de 3× o normal, pouco para medir repetição." },
     { "name": "no_day_night_cycle", "strength": "strong", "threshold": 0.5, "firesWhen": ">=", "value": 1, "fired": true,
       "description": "Sem ciclo dia/noite: 3 de 3 horas de madrugada (entre 03h e 06h, fuso America/Sao_Paulo) durante o pico ficaram no nível do topo (~10.964/h). Gente de verdade dorme: de madrugada a audiência costuma cair para uma fração do horário nobre." }
   ],
@@ -120,15 +120,19 @@ curl -s -X POST http://127.0.0.1:3000/classify -H 'content-type: application/jso
 4. O maior pico começa nas primeiras 12 horas da série, sem histórico antes: **inconclusivo** (não dá para medir subida nem volta ao normal).
 5. Nenhum sinal forte: **legítimo**.
 
-Quatro sinais são fortes. A subida em degrau é só de apoio: ela conta para formar o par, mas sozinha não muda nada, porque subir de uma vez é exatamente o que uma live e um vídeo que estoura fazem. Na prática, "suspeito" pede dois fortes, ou um forte junto com a subida em degrau.
+Quatro sinais são fortes. A subida em degrau é só de apoio: ela conta para formar o par, mas sozinha não muda nada, porque subir de uma vez é exatamente o que uma live e um vídeo que estoura fazem. Na prática, "suspeito" pede dois fortes, ou um forte junto com a subida em degrau. (O pedido falava em "sinal isolado dá inconclusivo"; a subida em degrau sozinha é a exceção, e dá legítimo, pelo motivo acima.)
+
+"Série plana normal" é a rotina com ciclo do dia e ruído, e ela sai legítima. Uma série literalmente constante (o mesmo número toda hora) não é normal: acima de 100 views/h ela dispara repetição mecânica e madrugada sem ciclo e sai suspeita.
 
 ### O pico
 
-Quase todos os sinais olham para o maior pico da série:
+Todos os sinais olham para o mesmo episódio, o maior pico da série, para que dois sinais que se somam falem da mesma coisa:
 
 - **Nível normal** do canal: mediana das 24 horas antes do topo.
-- **Pico** existe se a maior hora for pelo menos **5×** esse normal. O ciclo do dia sozinho faz a hora mais forte ficar em ~2× a mediana, e o ruído leva a ~3×; abaixo de 5× é um dia comum.
+- **Pico** existe se a maior hora for pelo menos **5×** esse normal. O ciclo do dia sozinho faz a hora mais forte ficar em ~1,5× a mediana, e o ruído leva a ~3×; abaixo de 5× é um dia comum.
 - **Topo**: as horas seguidas em volta do máximo com pelo menos metade do máximo.
+- **Evento**: as horas seguidas em volta do máximo acima de 3× o normal. É onde a repetição e a madrugada procuram.
+- Sem pico, repetição e madrugada olham a série inteira, e os outros três sinais não se aplicam.
 
 ### Os sinais
 
@@ -137,8 +141,10 @@ Quase todos os sinais olham para o maior pico da série:
 | `abrupt_rise` (subida em degrau) | Quantas horas as views levaram para sair do normal (até 2× o normal) e passar da metade do pico. | ≤ 2 horas | apoio |
 | `flat_plateau` (platô mecânico) | Quanto as views variaram no topo, sem a primeira e a última hora (que podem ser parciais). Coeficiente de variação. Precisa de 4 horas internas. | ≤ 5% | forte |
 | `cliff_drop` (queda abrupta) | Quantas horas, depois do topo, até voltar ao normal **daquele horário** (até 2× a mesma hora nos dias antes do pico). Só mede se o topo durou 3 horas ou mais. | ≤ 2 horas | forte |
-| `mechanical_repetition` (repetição mecânica) | Em janelas de 8 horas com média de 100 views/h ou mais: quanto as views oscilam além da tendência, comparado com o mínimo que o acaso produz com pessoas reais (±√média). Mesmo número toda hora e mesmo incremento toda hora dão oscilação perto de zero. | ≤ 0,15× | forte |
-| `no_day_night_cycle` (sem ciclo dia/noite) | Das horas entre 03h e 06h (fuso informado) que caem dentro do pico (horas seguidas acima de 3× o normal), quantas ficaram em 80% ou mais do nível do topo. Sem pico, olha a série inteira. Precisa de pelo menos 2 dessas horas. | ≥ 50% | forte |
+| `mechanical_repetition` (repetição mecânica) | Em janelas de 8 horas dentro do evento (que precisa durar 8 horas ou mais), com média de 100 views/h ou mais: quanto as views oscilam além da tendência, comparado com o mínimo que o acaso produz com pessoas reais (±√média). Mesmo número toda hora e mesmo incremento toda hora dão oscilação perto de zero. | ≤ 0,15× | forte |
+| `no_day_night_cycle` (sem ciclo dia/noite) | Das horas entre 03h e 06h (fuso informado) que caem dentro do evento, quantas ficaram em 80% ou mais do nível do topo. Precisa de pelo menos 2 dessas horas e de 10 views/h ou mais no topo. | ≥ 50% | forte |
+
+O `value` de cada sinal é arredondado, e o `fired` é calculado sobre esse mesmo número arredondado: o que a resposta mostra nunca contradiz o que disparou.
 
 ### Por que esses limiares
 
@@ -161,7 +167,7 @@ Quase todos os sinais olham para o maior pico da série:
 }
 ```
 
-No dataset, isso aconteceu com 13 das 240 séries suspeitas: o classificador viu um sinal e preferiu não acusar.
+No dataset, foi o que aconteceu com os suspeitos que saíram `inconclusive` (a contagem está em "Resultado no dataset sintético"): o classificador viu um sinal só e preferiu não acusar.
 
 ### O que o classificador NÃO detecta
 
@@ -169,13 +175,13 @@ No dataset, isso aconteceu com 13 das 240 séries suspeitas: o classificador viu
 - **Compra gradual espalhada em dias.** Sem degrau, sem platô e sem queda, parece crescimento orgânico (o cenário `slow_growth` do dataset tem exatamente essa cara).
 - **Fraude que acompanha engajamento real.** Robô que multiplica um viral verdadeiro herda o formato orgânico.
 - **Inflação pequena.** Menos de 5× o normal nem conta como pico. Comprar +50% de views passa.
-- **Picos menores que o maior.** Só o maior pico da série é analisado. Uma compra pequena na mesma semana de um viral real passa.
+- **Compra curta, de 1 a 2 horas.** Um pico que fica só 1 ou 2 horas no alto e some é tratado como compartilhamento isolado: a queda não é medida e não há platô. Exemplo: 10.000/h por 2 horas num canal de 120/h sai legítimo. Todo robô do dataset roda 4 horas ou mais, então a taxa de detecção acima não mede este ponto cego.
+- **Picos menores que o maior.** Só o maior pico da série é analisado. Uma compra menor na mesma semana de um viral real passa.
 - **Contas pequenas** (menos de 100 views/h) para a repetição mecânica.
 
-Os 7 suspeitos da seed padrão que passaram como legítimos mostram onde as regras falham:
+Os <!-- missed-count -->6<!-- /missed-count --> suspeitos da seed padrão que passaram como legítimos mostram onde as regras falham:
 
-- `mechanical_drip-007`, `-010` e `-054`: entrega em triângulo de 10 a 14 horas (sobe e desce com incremento fixo). Toda janela de 8 horas pega a virada ou a borda, e a repetição não aparece; a saída leva 3 horas, então também não é queda abrupta.
-- `mechanical_drip-021`: rampa exata de 24 horas, mas somada a uma audiência real de ~20 views/h que já oscila ±10. O acaso da audiência real esconde a regularidade do robô.
+- `mechanical_drip-007`, `mechanical_drip-010` e `mechanical_drip-054`: entrega em triângulo de 10 a 14 horas (sobe e desce com incremento fixo). Toda janela de 8 horas pega a virada ou a borda, e a repetição não aparece; a saída leva 3 a 4 horas, então também não é queda abrupta.
 - `step_cliff-026`: o robô saiu em rampa (nível caindo e última hora parcial), e a queda contou 3 horas.
 - `step_cliff-042`: o robô desligou às 06h, quando o normal do canal sobe rápido; a primeira hora depois ainda passou de 2× o normal daquele horário, e a queda contou 3 horas.
 - `night_injection-025`: robô de madrugada com ruído de ~20%. O topo "quebrou" em 3 horas acima da metade do máximo, e o resto da injeção contou como queda gradual de 5 horas.

@@ -1,7 +1,7 @@
 // npm run eval: gera o dataset (seed fixa), classifica tudo, imprime a matriz e grava eval-result.json.
 
 import { writeFileSync } from 'node:fs';
-import { evaluate, seedSensitivity } from '../src/evaluate';
+import { evaluate, formatConfusion, seedSensitivity } from '../src/evaluate';
 import { formatPercent } from '../src/local-time';
 
 const result = evaluate();
@@ -10,10 +10,7 @@ const pad = (s: string | number, n: number) => String(s).padStart(n);
 const cols = ['legitimate', 'suspicious', 'inconclusive'] as const;
 
 console.log(`Dataset sintético: ${result.total} séries (seed ${result.seed})\n`);
-console.log(`${'rótulo \\ classificado'.padEnd(22)}${cols.map((c) => pad(c, 14)).join('')}`);
-for (const label of ['legitimate', 'suspicious'] as const) {
-  console.log(`${label.padEnd(22)}${cols.map((c) => pad(result.confusion[label][c], 14)).join('')}`);
-}
+console.log(formatConfusion(result));
 console.log('\nPor cenário:');
 for (const [scenario, row] of Object.entries(result.byScenario)) {
   console.log(`  ${scenario.padEnd(18)} (${row.label.padEnd(10)})${cols.map((c) => pad(row[c], 6)).join('')}`);

@@ -8,16 +8,16 @@
       "inconclusive": 0
     },
     "suspicious": {
-      "legitimate": 7,
+      "legitimate": 6,
       "suspicious": 220,
-      "inconclusive": 13
+      "inconclusive": 14
     }
   },
   "falsePositiveRate": 0.004,
   "detectionRate": 0.9166666666666666,
   "inconclusiveRate": {
     "legitimate": 0,
-    "suspicious": 0.05416666666666667
+    "suspicious": 0.058333333333333334
   },
   "byScenario": {
     "baseline": {
@@ -64,9 +64,9 @@
     },
     "mechanical_drip": {
       "label": "suspicious",
-      "legitimate": 4,
+      "legitimate": 3,
       "suspicious": 45,
-      "inconclusive": 11
+      "inconclusive": 12
     },
     "night_injection": {
       "label": "suspicious",
@@ -84,7 +84,6 @@
     "step_cliff-042",
     "mechanical_drip-007",
     "mechanical_drip-010",
-    "mechanical_drip-021",
     "mechanical_drip-054",
     "night_injection-025"
   ],

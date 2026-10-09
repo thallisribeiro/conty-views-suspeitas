@@ -50,6 +50,8 @@ describe('POST /classify', () => {
   it('rejeita hora sem fuso, views negativas ou quebradas, fuso inválido e corpo vazio', async () => {
     const cases: [unknown, string][] = [
       [{ series: [{ hour: '2026-09-13T03:00:00', views: 1 }] }, 'com fuso'],
+      [{ series: [{ hour: '2026-09-13T03:30:00Z', views: 1 }] }, 'minutos zerados'],
+      [{ series: [{ hour: '2026-02-30T03:00:00Z', views: 1 }] }, 'data que existe'],
       [{ series: [{ hour: '2026-09-13T03:00:00Z', views: -1 }] }, 'zero ou mais'],
       [{ series: [{ hour: '2026-09-13T03:00:00Z', views: 1.5 }] }, 'inteiro'],
       [{ series: [{ hour: '2026-09-13T03:00:00Z', views: 1 }], timezone: 'Marte/Olympus' }, 'fuso IANA'],
@@ -61,6 +63,12 @@ describe('POST /classify', () => {
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toContain(message);
     }
+  });
+
+  it('rota inexistente responde 404 em português', async () => {
+    const res = await app.inject({ method: 'GET', url: '/classify' });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe('Rota GET /classify não existe. Use POST /classify.');
   });
 
   it('rejeita JSON malformado com mensagem em português', async () => {

@@ -57,6 +57,16 @@ export function evaluate(seed = DEFAULT_SEED): EvaluationResult {
   };
 }
 
+/** A matriz de confusão como texto: o `npm run eval` imprime isto e o README copia (um teste confere). */
+export function formatConfusion(result: EvaluationResult): string {
+  const cols = ['legitimate', 'suspicious', 'inconclusive'] as const;
+  const row = (head: string, cells: (string | number)[]) => head.padEnd(22) + cells.map((c) => String(c).padStart(14)).join('');
+  return [
+    row('rótulo \\ classificado', [...cols]),
+    ...(['legitimate', 'suspicious'] as const).map((label) => row(label, cols.map((c) => result.confusion[label][c]))),
+  ].join('\n');
+}
+
 /** Mesma avaliação com outras seeds, para mostrar quanto o número oscila só pelo sorteio do dataset. */
 export const SENSITIVITY_SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 

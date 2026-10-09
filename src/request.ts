@@ -5,8 +5,17 @@ import { DEFAULT_TIMEZONE, isValidTimezone } from './local-time';
 
 export const MAX_HOURS = 24 * 90;
 const HOUR_MS = 3_600_000;
-/** Data e hora com fuso explícito: "2026-09-13T03:00:00-03:00" ou "...Z". Sem fuso, "03h" seria ambíguo. */
-const ISO_WITH_OFFSET = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+/** Início de hora com fuso explícito: "2026-09-13T03:00:00-03:00" ou "...Z". Sem fuso, "03h" seria ambíguo. */
+const HOUR_START = /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):00(:00(\.0{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** Recusa datas que o Date "conserta" sozinho, como 30 de fevereiro virando 2 de março. */
+function isHourStart(text: string): boolean {
+  const m = HOUR_START.exec(text);
+  if (!m) return false;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const calendar = new Date(Date.UTC(year, month - 1, day));
+  return calendar.getUTCFullYear() === year && calendar.getUTCMonth() === month - 1 && calendar.getUTCDate() === day;
+}
 
 export class InvalidRequest extends Error {}
 
@@ -35,8 +44,10 @@ export function parseClassifyRequest(body: unknown): ClassifyRequest {
     const where = `series[${i}]`;
     if (typeof point !== 'object' || point === null) throw new InvalidRequest(`${where} precisa ser um objeto { "hour", "views" }.`);
     const { hour, views } = point as Record<string, unknown>;
-    if (typeof hour !== 'string' || !ISO_WITH_OFFSET.test(hour) || Number.isNaN(Date.parse(hour))) {
-      throw new InvalidRequest(`${where}.hour precisa ser data e hora ISO 8601 com fuso, como "2026-09-13T03:00:00-03:00". Recebido: ${JSON.stringify(hour)}.`);
+    if (typeof hour !== 'string' || !isHourStart(hour)) {
+      throw new InvalidRequest(
+        `${where}.hour precisa ser o início de uma hora em ISO 8601 com fuso, como "2026-09-13T03:00:00-03:00" (minutos zerados, data que existe). Recebido: ${JSON.stringify(hour)}.`,
+      );
     }
     if (typeof views !== 'number' || !Number.isSafeInteger(views) || views < 0) {
       throw new InvalidRequest(`${where}.views precisa ser um número inteiro de views naquela hora, zero ou mais. Recebido: ${JSON.stringify(views)}.`);

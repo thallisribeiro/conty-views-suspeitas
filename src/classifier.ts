@@ -53,6 +53,7 @@ export const RULES = {
   repetitionMaxNoise: 0.15,
   nightHours: [3, 4, 5],
   nightMinHours: 2,
+  nightMinViews: 10,
   nightLevel: 0.8,
   nightMinShare: 0.5,
 } as const;
@@ -94,6 +95,9 @@ interface Peak {
   /** Até 2× o normal (mínimo 10): a hora ainda "está no normal". Marca onde a subida começou. */
   near: number;
   ratio: number;
+  /** O evento inteiro: horas seguidas em volta do máximo acima de 3× o normal. Repetição e madrugada olham só aqui. */
+  eventStart: number;
+  eventEnd: number;
 }
 
 type PeakAnalysis =
@@ -128,9 +132,13 @@ function findPeak(v: number[]): PeakAnalysis {
   const baseline = median(history);
   const ratio = max / Math.max(baseline, 1);
   if (ratio < RULES.peakMinRatio) return flat(ratio);
-  return {
-    peak: { max, maxIndex, topStart, topEnd, baseline, near: Math.max(2 * baseline, 10), ratio },
-  };
+  const near = Math.max(2 * baseline, 10);
+  const floor = Math.max(3 * baseline, near);
+  let eventStart = maxIndex;
+  while (eventStart > 0 && v[eventStart - 1] >= floor) eventStart--;
+  let eventEnd = maxIndex;
+  while (eventEnd < v.length - 1 && v[eventEnd + 1] >= floor) eventEnd++;
+  return { peak: { max, maxIndex, topStart, topEnd, baseline, near, ratio, eventStart, eventEnd } };
 }
 
 // ---------- os sinais ----------
@@ -184,12 +192,13 @@ function flatPlateau(ctx: Context): Signal {
   if (inner.length < RULES.plateauMinHours) {
     return notApplicable(base, `o topo do pico durou ${hoursLabel(p.topEnd - p.topStart + 1)}, pouco para medir um platô`);
   }
-  const cv = coefficientOfVariation(inner);
+  // O limiar compara o mesmo número que a resposta mostra: value e fired nunca se contradizem.
+  const cv = round(coefficientOfVariation(inner), 4);
   const fired = cv <= RULES.plateauMaxCv;
   const description = fired
     ? `Platô mecânico: de ${when(ctx, p.topStart + 1)} a ${when(ctx, p.topEnd - 1)} (${inner.length} horas) as views ficaram quase constantes em ~${formatInt(mean(inner))}/h, variação de ${formatPercent(cv)}. Audiência real oscila e vai perdendo força depois do pico.`
     : `O topo do pico variou ${formatPercent(cv)} em ${inner.length} horas, como audiência real (platô mecânico seria até ${formatPercent(RULES.plateauMaxCv)}).`;
-  return { ...base, value: round(cv, 4), fired, description };
+  return { ...base, value: cv, fired, description };
 }
 
 /** Quantas horas levou para sair do topo e voltar perto do nível de antes do pico. */
@@ -248,32 +257,39 @@ function mechanicalRepetition(ctx: Context): Signal {
     for (let i = 1; i < w.length - 1; i++) squares += (w[i + 1] - 2 * w[i] + w[i - 1]) ** 2;
     return Math.sqrt(squares / ((w.length - 2) * 6));
   };
+  // Com pico, só olha janelas dentro do evento: os sinais que se somam precisam falar do mesmo episódio.
+  const peak = ctx.analysis.peak;
+  const [first, last] = peak ? [peak.eventStart, peak.eventEnd] : [0, v.length - 1];
+  if (last - first + 1 < W) {
+    return notApplicable(base, `o pico ficou menos de ${W} horas acima de 3× o normal, pouco para medir repetição`);
+  }
   const windows: { start: number; ratio: number }[] = [];
-  for (let s = 0; s + W <= v.length; s++) {
+  for (let s = first; s + W - 1 <= last; s++) {
     const w = v.slice(s, s + W);
     const m = mean(w);
-    if (m >= RULES.repetitionMinViews) windows.push({ start: s, ratio: noiseSd(w) / Math.sqrt(m) });
+    if (m >= RULES.repetitionMinViews) windows.push({ start: s, ratio: round(noiseSd(w) / Math.sqrt(m)) });
   }
   if (!windows.length) {
     return notApplicable(base, `nenhum trecho de ${W} horas com pelo menos ${RULES.repetitionMinViews} views/h; com contagens pequenas, números repetidos acontecem por acaso`);
   }
+  const fires = (k: number) => windows[k].ratio <= RULES.repetitionMaxNoise;
   let best = 0;
   for (let k = 1; k < windows.length; k++) if (windows[k].ratio < windows[best].ratio) best = k;
   const ratio = windows[best].ratio;
-  const fired = ratio <= RULES.repetitionMaxNoise;
+  const fired = fires(best);
   if (!fired) {
     return {
       ...base,
-      value: round(ratio),
+      value: ratio,
       fired,
-      description: `As oscilações de hora em hora parecem acaso de audiência real: mesmo no trecho mais regular, ficaram em ${formatDecimal(ratio, 2)}× o que o acaso de pessoas reais produz (repetição mecânica seria até ${formatDecimal(RULES.repetitionMaxNoise, 2)}×).`,
+      description: `Nenhum trecho regular demais: mesmo no mais regular, a oscilação de hora em hora foi ${formatDecimal(ratio, 2)}× a que o acaso de pessoas reais produz (repetição mecânica seria até ${formatDecimal(RULES.repetitionMaxNoise, 2)}×).`,
     };
   }
   // Junta as janelas vizinhas que também disparam, para dizer o trecho inteiro.
   let lo = best;
-  while (lo > 0 && windows[lo - 1].start === windows[lo].start - 1 && windows[lo - 1].ratio <= RULES.repetitionMaxNoise) lo--;
+  while (lo > 0 && windows[lo - 1].start === windows[lo].start - 1 && fires(lo - 1)) lo--;
   let hi = best;
-  while (hi < windows.length - 1 && windows[hi + 1].start === windows[hi].start + 1 && windows[hi + 1].ratio <= RULES.repetitionMaxNoise) hi++;
+  while (hi < windows.length - 1 && windows[hi + 1].start === windows[hi].start + 1 && fires(hi + 1)) hi++;
   const from = windows[lo].start;
   const to = windows[hi].start + W - 1;
   const stretch = v.slice(from, to + 1);
@@ -285,7 +301,7 @@ function mechanicalRepetition(ctx: Context): Signal {
       : `${step > 0 ? 'subiram' : 'caíram'} quase exatamente o mesmo tanto a cada hora (${formatInt(Math.abs(step))} por hora, em torno de ${formatInt(m)}/h)`;
   return {
     ...base,
-    value: round(ratio),
+    value: ratio,
     fired,
     description: `Repetição mecânica: de ${when(ctx, from)} a ${when(ctx, to)} (${to - from + 1} horas) as views ${pattern}. Fora desse padrão, a oscilação foi de ±${formatInt(noiseSd(stretch))}/h; com pessoas reais, só o acaso já faria oscilar uns ±${formatInt(Math.sqrt(m))}/h nesse volume.`,
   };
@@ -304,36 +320,26 @@ function noDayNightCycle(ctx: Context): Signal {
   } as const;
   const v = ctx.views;
   const peak = ctx.analysis.peak;
-  let from = 0;
-  let to = v.length - 1;
-  let top: number[];
-  if (peak) {
-    // Janela do pico: tudo em volta do máximo que ficou acima de 3× o normal.
-    const floor = Math.max(3 * peak.baseline, peak.near);
-    from = peak.maxIndex;
-    while (from > 0 && v[from - 1] >= floor) from--;
-    to = peak.maxIndex;
-    while (to < v.length - 1 && v[to + 1] >= floor) to++;
-    top = v.slice(peak.topStart, peak.topEnd + 1);
-  } else {
-    const max = Math.max(...v);
-    top = v.filter((x) => x >= max / 2);
-  }
-  const scope = peak ? 'pico' : 'série';
+  const [from, to] = peak ? [peak.eventStart, peak.eventEnd] : [0, v.length - 1];
+  const top = peak ? v.slice(peak.topStart, peak.topEnd + 1) : v.filter((x) => x >= Math.max(...v) / 2);
+  const scope = peak ? { the: 'o pico', of: 'do pico' } : { the: 'a série', of: 'da série' };
   const nightHours: readonly number[] = RULES.nightHours;
   const night: number[] = [];
   for (let i = from; i <= to; i++) if (nightHours.includes(localHour(ctx.hours[i], ctx.timezone))) night.push(i);
   if (night.length < RULES.nightMinHours) {
-    return notApplicable(base, `o ${scope} não passou pela madrugada (${NIGHT_LABEL}, fuso ${ctx.timezone})`);
+    return notApplicable(base, `${scope.the} não passou pela madrugada (${NIGHT_LABEL}, fuso ${ctx.timezone})`);
   }
   const topLevel = median(top);
+  if (topLevel < RULES.nightMinViews) {
+    return notApplicable(base, `com ~${formatInt(topLevel)} views/h no topo, o volume é pequeno demais para comparar madrugada e horário nobre`);
+  }
   const atLevel = night.filter((i) => v[i] >= RULES.nightLevel * topLevel).length;
-  const share = atLevel / night.length;
+  const share = round(atLevel / night.length);
   const fired = share >= RULES.nightMinShare;
   const description = fired
-    ? `Sem ciclo dia/noite: ${atLevel} de ${night.length} horas de madrugada (${NIGHT_LABEL}, fuso ${ctx.timezone}) durante o ${scope} ficaram no nível do topo (~${formatInt(topLevel)}/h). Gente de verdade dorme: de madrugada a audiência costuma cair para uma fração do horário nobre.`
-    : `A madrugada foi mais fraca, como esperado: só ${atLevel} de ${night.length} horas de madrugada (${NIGHT_LABEL}) ficaram perto do topo do ${scope} (~${formatInt(topLevel)}/h).`;
-  return { ...base, value: round(share), fired, description };
+    ? `Sem ciclo dia/noite: ${atLevel} de ${night.length} horas de madrugada (${NIGHT_LABEL}, fuso ${ctx.timezone}) durante ${scope.the} ficaram no nível do topo (~${formatInt(topLevel)}/h). Gente de verdade dorme: de madrugada a audiência costuma cair para uma fração do horário nobre.`
+    : `A madrugada foi mais fraca, como esperado: só ${atLevel} de ${night.length} horas de madrugada (${NIGHT_LABEL}) ficaram perto do topo ${scope.of} (~${formatInt(topLevel)}/h).`;
+  return { ...base, value: share, fired, description };
 }
 
 // ---------- decisão ----------
@@ -355,6 +361,9 @@ function decide(signals: Signal[], ctx: Context): Pick<ClassificationResult, 'cl
       classification: 'inconclusive',
       reason: `Inconclusivo: a série tem só ${n} horas. Para julgar um pico são necessárias pelo menos ${RULES.minHours} horas (dois dias), para conhecer o ritmo normal do canal antes dele.`,
     };
+  }
+  if (ctx.views.every((x) => x === 0)) {
+    return { classification: 'inconclusive', reason: 'Inconclusivo: a série não tem nenhuma view; não há audiência para julgar.' };
   }
   if (fired.length >= 2 && strong.length >= 1) {
     return {

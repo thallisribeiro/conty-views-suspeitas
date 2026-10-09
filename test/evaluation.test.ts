@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SEED, generateDataset } from '../src/dataset';
-import { evaluate, seedSensitivity } from '../src/evaluate';
+import { evaluate, formatConfusion, seedSensitivity } from '../src/evaluate';
 import { formatPercent } from '../src/local-time';
 
-const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+// Sem \r: num clone do Windows com autocrlf o README vem com CRLF.
+const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 /** Extrai o texto entre <!-- nome --> e <!-- /nome --> no README. */
 function marker(name: string): string {
   const match = readme.match(new RegExp(`<!-- ${name} -->(.*?)<!-- /${name} -->`));
@@ -27,6 +28,16 @@ describe('número do README = número medido', () => {
     const { falsePositiveRate: fp, detectionRate: det } = seedSensitivity();
     expect(marker('fp-range')).toBe(`${formatPercent(fp.min)} a ${formatPercent(fp.max)}`);
     expect(marker('detection-range')).toBe(`${formatPercent(det.min)} a ${formatPercent(det.max)}`);
+  });
+
+  it('a matriz de confusão, as contagens e os casos citados no README são os medidos', () => {
+    expect(readme).toContain(formatConfusion(measured));
+    const legit = measured.confusion.legitimate;
+    const susp = measured.confusion.suspicious;
+    expect(marker('fp-count')).toBe(`${legit.suspicious} de ${legit.legitimate + legit.suspicious + legit.inconclusive}`);
+    expect(marker('inconclusive-suspicious')).toBe(`${susp.inconclusive} suspeitos (${formatPercent(measured.inconclusiveRate.suspicious)})`);
+    expect(marker('missed-count')).toBe(String(measured.missedAsLegitimate.length));
+    for (const id of [...measured.falsePositives, ...measured.missedAsLegitimate]) expect(readme).toContain(`\`${id}\``);
   });
 
   it('eval-result.json no repositório está atualizado com a avaliação', () => {

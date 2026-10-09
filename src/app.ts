@@ -10,6 +10,10 @@ export function buildApp() {
     return { ...classify(series, timezone), timezone, hours: series.length };
   });
 
+  app.setNotFoundHandler((request, reply) =>
+    reply.code(404).send({ error: `Rota ${request.method} ${request.url} não existe. Use POST /classify.` }),
+  );
+
   app.setErrorHandler((error: FastifyError, _request, reply) => {
     if (error instanceof InvalidRequest) return reply.code(400).send({ error: error.message });
     if (error.code === 'FST_ERR_CTP_INVALID_MEDIA_TYPE') {
